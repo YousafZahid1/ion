@@ -394,20 +394,24 @@ class EighthActivity(AbstractBaseEighthModel):
         """
         return self.get_active_schedulings().exists()
 
-    @property
-    def frequent_users(self) -> Union[QuerySet, Collection["get_user_model()"]]:  # pylint: disable=unsubscriptable-object
+    def frequent_users(self, user: "get_user_model()") -> Union[QuerySet, Collection["get_user_model()"]]:  # pylint: disable=unsubscriptable-object
         """Return a QuerySet of user id's and counts that have signed up for this activity more than
         `settings.SIMILAR_THRESHOLD` times.
         This is used for suggesting activities to users.
+        Args:
+            user: The user to check.
         Returns:
             A QuerySet of users who attend this activity frequently.
         """
+        if self.id not in EighthActivity.activities_visible_to_user(user):
+            return get_user_model().objects.none()
+
         key = f"eighthactivity_{self.id}:frequent_users"
         cached = cache.get(key)
         if cached:
             return cached
         freq_users = (
-            self.eighthscheduledactivity_set.exclude(Q(eighthsignup_set__user=None) | Q(administrative=True) | Q(special=True) | Q(restricted=True))
+            self.eighthscheduledactivity_set.exclude(Q(eighthsignup_set__user=None) | Q(special=True) | Q(restricted=True))
             .values("eighthsignup_set__user")
             .annotate(count=Count("eighthsignup_set__user"))
             .filter(count__gte=settings.SIMILAR_THRESHOLD)
